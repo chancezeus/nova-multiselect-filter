@@ -3,6 +3,7 @@
 
 namespace OptimistDigtal\NovaMultiselectFilter;
 
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Nova\Events\ServingNova;
 use Laravel\Nova\Nova;
@@ -11,6 +12,7 @@ use OptimistDigital\NovaTranslationsLoader\LoadsNovaTranslations;
 class FilterServiceProvider extends ServiceProvider
 {
     use LoadsNovaTranslations;
+
     /**
      * Bootstrap any application services.
      *
@@ -23,5 +25,23 @@ class FilterServiceProvider extends ServiceProvider
         });
 
         $this->loadTranslations(__DIR__ . '/../resources/lang', 'nova-multiselect-filter', true);
+
+        Route::group($this->routeConfiguration(), function () {
+            $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+        });
+    }
+
+    /**
+     * @return array
+     */
+    private function routeConfiguration(): array
+    {
+        return [
+            'namespace' => 'OptimistDigtal\\NovaMultiselectFilter\\Http',
+            'domain' => config('nova.domain'),
+            'as' => 'nova.api.',
+            'prefix' => 'nova-api',
+            'middleware' => 'nova',
+        ];
     }
 }

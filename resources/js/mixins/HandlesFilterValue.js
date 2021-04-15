@@ -12,38 +12,44 @@ export default {
   methods: {
     getInitialFilterValuesArray() {
       try {
-        if (!this.value) return void 0;
-        if (Array.isArray(this.value)) return this.value;
+        if (!this.value) {
+          return undefined;
+        }
+
+        if (Array.isArray(this.value)) {
+          return this.value;
+        }
 
         // Attempt to parse the field value
         if (typeof this.value === 'string') {
           let value = this.value;
-          while (typeof value === 'string') value = JSON.parse(value);
-          if (Array.isArray(value)) return value;
-        }
 
-        return void 0;
+          while (typeof value === 'string') {
+            value = JSON.parse(value);
+          }
+
+          if (Array.isArray(value)) {
+            return value;
+          }
+        }
       } catch (e) {
-        return void 0;
       }
     },
 
     getValueFromOptions(value) {
-      let options = this.filter.options;
-
       if (this.isOptionGroups) {
-        return this.filter.options
+        return this.options
           .map(optGroup => optGroup.values.map(values => ({ ...values, group: optGroup.label })))
           .flat()
           .find(opt => String(opt.value) === String(value));
       }
 
-      return options.find(opt => String(opt.value) === String(value));
+      return this.options.find(opt => String(opt.value) === String(value));
     },
   },
   computed: {
     isOptionGroups() {
-      return !!this.filter.options && !!this.filter.options.find(opt => opt.values && Array.isArray(opt.values));
+      return !!this.options && !!this.options.find(opt => opt.values && Array.isArray(opt.values));
     },
 
     isMultiselect() {
@@ -59,7 +65,7 @@ export default {
           return {
             ...option,
             values: option.values.map(opt => {
-              const isDuplicate = allLabels.filter(l => l === opt.label).length > 1;
+              const isDuplicate = allLabels.findIndex(l => l === opt.label) !== -1;
               return { ...opt, label: isDuplicate ? `${opt.label} (${option.label})` : opt.label };
             }),
           };

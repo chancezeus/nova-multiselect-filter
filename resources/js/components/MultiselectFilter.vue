@@ -26,11 +26,15 @@
         :optionsLimit="filter.optionsLimit || 1000"
         :optionHeight="32"
         :limitText="count => __('novaMultiselectFilter.limitText', { count: String(count || '') })"
+        :searchable="true"
+        :internal-search="false"
+        :loading="isLoading"
         selectLabel=""
         selectGroupLabel=""
         selectedLabel=""
         deselectLabel=""
         deselectGroupLabel=""
+        @search-change="asyncFind"
       >
         <template slot="maxElements">
           {{ __('novaMultiselectFilter.maxElements', { max: String(filter.max || '') }) }}
@@ -55,42 +59,69 @@ import { Filterable, InteractsWithQueryString } from 'laravel-nova';
 
 export default {
   components: { Multiselect },
+
   mixins: [Filterable, InteractsWithQueryString, HandlesFilterValue],
-  props: ['resourceName', 'resourceId', 'filterKey'],
+
+  props: {
+    resourceName: {
+      type: String,
+      required: true,
+    },
+    lens: String,
+    filterKey: {
+      type: String,
+      required: true,
+    }
+  },
 
   data: () => ({
     options: [],
     isDropdownOpen: false,
     selectedOptions: [],
     isTouched: false,
+    isLoading: false,
   }),
+
+  mounted() {
+    this.loadInitialOptions();
+  },
 
   methods: {
     handleChange(value) {
-      if (!this.isMultiselect) value = value ? [value] : [];
+      if (!this.isMultiselect) {
+        value = value ? [value] : [];
+      }
+
       this.isTouched = true;
       this.selectedOptions = value;
     },
 
     handleClose() {
       this.isDropdownOpen = false;
+
       this.emitChanges();
     },
 
     handleOpen() {
       this.isDropdownOpen = true;
+
+      this.asyncFind('', true);
     },
 
     handleRemove() {
       // Resolve issue where handleRemove is called before handleChange
       this.$nextTick(() => {
-        if (!this.isDropdownOpen) this.emitChanges();
+        if (!this.isDropdownOpen) {
+          this.emitChanges();
+        }
       });
     },
 
     emitChanges() {
       //  Check if values have been changed
-      if (JSON.stringify(this.value) === JSON.stringify(this.values) || this.values == null) return;
+      if (JSON.stringify(this.value) === JSON.stringify(this.values) || this.values == null) {
+        return;
+      }
 
       // Update filter state
       this.$store.commit(`${this.resourceName}/updateFilterState`, {
@@ -103,6 +134,50 @@ export default {
       this.selectedOptions = [];
       this.$emit('change');
     },
+
+    async asyncFind(search, first) {
+      if (this.isAsync && (first || this.isDropdownOpen)) {
+        this.isLoading = true
+
+        try {
+          const lens = this.lens ? `/lens/${this.lens}` : '';
+
+          const {data: options} = await Nova.request().get(`/nova-api/${this.resourceName}${lens}/multi-select-filter/options`, {
+            params: {
+              filters: this.$store.getters[`${this.resourceName}/currentEncodedFilters`],
+              filter: this.filterKey,
+              search,
+            },
+          });
+
+          this.options = options;
+        } finally {
+          this.isLoading = false;
+        }
+      }
+    },
+
+    async loadInitialOptions() {
+      if (this.isAsync && this.value) {
+        this.isLoading = true
+
+        try {
+          const lens = this.lens ? `/lens/${this.lens}` : '';
+
+          const {data: options} = await Nova.request().get(`/nova-api/${this.resourceName}${lens}/multi-select-filter/options`, {
+            params: {
+              filters: this.$store.getters[`${this.resourceName}/currentEncodedFilters`],
+              filter: this.filterKey,
+              selected: this.value,
+            },
+          });
+
+          this.options = options;
+        } finally {
+          this.isLoading = false;
+        }
+      }
+    }
   },
 
   computed: {
@@ -133,6 +208,10 @@ export default {
       });
 
       return values.length ? values : '';
+    },
+
+    isAsync() {
+      return !!this.filter.async
     },
   },
 };

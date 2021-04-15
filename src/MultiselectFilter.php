@@ -3,14 +3,26 @@
 
 namespace OptimistDigtal\NovaMultiselectFilter;
 
-use Illuminate\Container\Container;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Laravel\Nova\Filters\Filter;
 
 abstract class MultiselectFilter extends Filter
 {
     public $component = 'nova-multiselect-filter';
+
+    /** @var bool */
+    private bool $async = false;
+
+    /** @var string|null */
+    private ?string $key = null;
+
+    public function __construct(string $name = null, string $key = null)
+    {
+        $this->name = $name;
+        $this->key = $key ?? ($name ? Str::slug($name) : null);
+    }
 
     /**
      * Apply the filter to the given query.
@@ -26,12 +38,24 @@ abstract class MultiselectFilter extends Filter
     }
 
     /**
+     * @param bool $async
+     * @return $this
+     */
+    public function async(bool $async = true): self
+    {
+        $this->async = $async;
+
+        return $this->withMeta(['async' => $async]);
+    }
+
+    /**
      * Get the filter's options.
      *
      * @param Request $request
-     * @return array|callable
+     * @param array $filterValues
+     * @return array
      */
-    public function options(Request $request)
+    public function options(Request $request, array $filterValues = []): array
     {
         return [];
     }
@@ -39,10 +63,10 @@ abstract class MultiselectFilter extends Filter
     /**
      * Sets the placeholder value displayed on the field.
      *
-     * @param $placeholder
-     * @return MultiselectFilter
+     * @param string|null $placeholder
+     * @return $this
      */
-    public function placeholder($placeholder)
+    public function placeholder(?string $placeholder): self
     {
         return $this->withMeta(['placeholder' => $placeholder]);
     }
@@ -50,10 +74,10 @@ abstract class MultiselectFilter extends Filter
     /**
      * Sets the max number of options the user can select.
      *
-     * @param $placeholder
-     * @return MultiselectFilter
+     * @param int|null $max
+     * @return $this
      */
-    public function max($max)
+    public function max(?int $max): self
     {
         return $this->withMeta(['max' => $max]);
     }
@@ -64,9 +88,9 @@ abstract class MultiselectFilter extends Filter
      * This forces the value saved to be a single value and not an array.
      *
      * @param bool $singleSelect
-     * @return MultiselectFilter
+     * @return $this
      **/
-    public function singleSelect($singleSelect = true)
+    public function singleSelect(bool $singleSelect = true): self
     {
         return $this->withMeta(['singleSelect' => $singleSelect]);
     }
@@ -74,10 +98,10 @@ abstract class MultiselectFilter extends Filter
     /**
      * Sets the maximum number of options displayed at once.
      *
-     * @param $optionsLimit
-     * @return MultiselectFilter
+     * @param int|null $optionsLimit
+     * @return $this
      */
-    public function optionsLimit($optionsLimit)
+    public function optionsLimit(?int $optionsLimit): self
     {
         return $this->withMeta(['optionsLimit' => $optionsLimit]);
     }
@@ -87,9 +111,9 @@ abstract class MultiselectFilter extends Filter
      * user to select the whole group at once.
      *
      * @param bool $groupSelect
-     * @return MultiselectFilter
+     * @return $this
      */
-    public function groupSelect($groupSelect = true)
+    public function groupSelect(bool $groupSelect = true): self
     {
         return $this->withMeta(['groupSelect' => $groupSelect]);
     }
@@ -97,18 +121,15 @@ abstract class MultiselectFilter extends Filter
     /**
      * Formats the options available for select.
      *
-     * @param $container
-     * @param $request
+     * @param \Illuminate\Http\Request $request
+     * @param array $filterValues
      * @return array
      */
-    public function getFormattedOptions($container, $request)
+    public function getFormattedOptions(Request $request, array $filterValues = []): array
     {
-        $options = $this->options($container->make($request));
-        $options = collect($options ?? []);
+        $options = collect($this->options($request, $filterValues) ?? []);
 
-        $isOptionGroup = $options->contains(function ($label, $value) {
-            return is_array($label);
-        });
+        $isOptionGroup = $options->contains(fn($label) => is_array($label));
 
         if ($isOptionGroup) {
             return $options
@@ -133,15 +154,23 @@ abstract class MultiselectFilter extends Filter
      *
      * @return array
      */
-    public
-    function jsonSerialize()
+    public function jsonSerialize(): array
     {
         return array_merge([
             'class' => $this->key(),
             'name' => $this->name(),
             'component' => $this->component(),
-            'options' => $this->getFormattedOptions(Container::getInstance(), Request::class),
+            'options' => $this->async ? [] : $this->getFormattedOptions(app(Request::class)),
             'currentValue' => $this->default() ?? '',
         ], $this->meta());
     }
+
+    /**
+     * @return string
+     */
+    public function key(): string
+    {
+        return $this->key ?? parent::key();
+    }
+
 }
